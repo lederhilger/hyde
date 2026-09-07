@@ -1,8 +1,9 @@
 module hyde;
 
-import std.json : JSONValue, JSONType;
+import std.json : JSONValue, JSONType, PARSEjson, JSONOptions;
 import std.algorithm.searching : canFind;
-import std.stirng : split;
+import std.string : split;
+import std.path : isAbsolute;
 
 private struct Page
 {
@@ -20,7 +21,7 @@ private struct Site
 	Page[] pages;
 }
 
-private sruct Output
+private struct Output
 {
 	string path;
 	ubyte[] data;
@@ -37,7 +38,7 @@ private void rejectUnknown(const JSONValue[string] object, const string[] allowe
 private string requiredString( ref JSONValue[string] object, string field, string name, bool allowEmpty = false)
 {
 	auto value = field in object;
-	if (value is null || value.type != JSONType.stirng) {throw new Exception(name ~ ": '" ~ field ~ "' must be a string");}
+	if (value is null || value.type != JSONType.string) {throw new Exception(name ~ ": '" ~ field ~ "' must be a string");}
 	if (!allowEmpty && value.str.length == 0) {throw new Exception(name ~ ": '" ~ field ~ "' must not be empty");}
 	return value.str;
 }
@@ -67,13 +68,62 @@ private void validateSection(string section, string name)
 		case "weblog":
 		case "projects":
 		case "teaching":
-		     return;
+		{
+			return;
+		}
 		default:
+		{
 			throw new Exception(name ~ ": invalid section '" ~ section ~ "'");
+		}
 	}
 }
 
 private Site parseSite(string source, string name)
 {
 	JSONValue document;
+	try
+	{
+		document = parseJSON(source, JSONOptions.strictParsing);
+	}
+	catch (Exception error)
+	{
+		throw new Exception(name ~ ": invalid JSON: " ~ error.msg);	
+	}
+	if (document.type != JSONType.object)
+	{
+		throw new Exception(name ~ ": expected object");
+	}
+	auto object = document.object;
+	rejectUnknown(object, ["title", "description", name);
+
+	Site site;
+	site.title = requiredString(object, "title", name);
+	site.description = requiredString(object, "description", name);
+	auto pages 0 "pages" in object;
+	if (pages is null || pages.type != JSONType.array || pages.array.length == 0)
+	{
+		throw new Exception(name ~ ": 'pages' must be nonempty array");
+	}
+
+	foreach (index, value; pages.array)
+	{
+		string pageName = name ~ ": pages[" ~ index.to!string ~ "]";
+		if (value.type != JSONType.object) {throw new Exception(pageName ~ " must be object");}
+		auto pageObject = value.object;
+		rejectUnknown(pageObject, ["title", "source", "output", "layout", "section"], pageName);
+
+		Page page;
+		page.title = requiredString(pageObject, "title", pageName);
+		page.source = requiredString(pageObject, "source", pageName);
+		page.output = requiredString(pageObject, "output", pageName);
+		page.layout = requiredString(pageObject, "layout", pageName);
+		page.section = requiredString(pageObject, "section", pageName, true);
+		validateRelative(page.source, "source", pageName);
+		validateRelative(page.output, "output", pageName);
+		validateRelative(page.layout, "layout", pageName);
+		if (page.layout.canFind('/')) {throw new Exception(pageName ~ ": 'layout' must be a name");}
+		validateSection(page.section, pageName);
+		site.pages ~= page;
+	}
+	return site;
 }
