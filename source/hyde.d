@@ -1,9 +1,10 @@
 module hyde;
 
-import std.json : JSONValue, JSONType, PARSEjson, JSONOptions;
+import std.json : JSONValue, JSONType, parseJSON, JSONOptions;
 import std.algorithm.searching : canFind;
 import std.string : split;
 import std.path : isAbsolute;
+import std.conv : to;
 
 private struct Page
 {
@@ -94,12 +95,12 @@ private Site parseSite(string source, string name)
 		throw new Exception(name ~ ": expected object");
 	}
 	auto object = document.object;
-	rejectUnknown(object, ["title", "description", name);
+	rejectUnknown(object, ["title", "description", "pages"], name);
 
 	Site site;
 	site.title = requiredString(object, "title", name);
 	site.description = requiredString(object, "description", name);
-	auto pages 0 "pages" in object;
+	auto pages = "pages" in object;
 	if (pages is null || pages.type != JSONType.array || pages.array.length == 0)
 	{
 		throw new Exception(name ~ ": 'pages' must be nonempty array");
