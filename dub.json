@@ -1,4 +1,7 @@
 {
     "name":"hyde",
-    "mainSourceFile":"hyde.d"
+    "targetType": "executable",
+    "targetPath": "build",
+    "mainSourceFile":"source/hyde.d",
+    "configurations": [{"name": "application"}, {"name": "unittest"}]
 }
