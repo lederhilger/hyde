@@ -3,11 +3,15 @@ module hyde;
 enum hydeVersion = "0.0.0";
 
 import std.json : JSONValue, JSONType, parseJSON, JSONOptions;
-import std.algorithm.searching : canFind;
-import std.string : split;
-import std.path : isAbsolute;
+import std.algorithm.searching : canFind, endsWith, startsWith;
+import std.string : split, indexOf, toStringz, fromStringz;
+import std.path : isAbsolute, buildPath, absolutePath;
+import core.sys.posix.stdlib : realpath;
 import std.conv : to;
 import std.stdio : stdout;
+import std.array : appender;
+import core.stdc.stdlib : free;
+import std.file : isDir, exists, isSymlink, readText, isFile;
 
 private struct Page
 {
@@ -132,17 +136,220 @@ private Site parseSite(string source, string name)
 	return site;
 }
 
+private string navigation(string section)
+{
+	static immutable links = [
+	       ["cv", "CV"],
+	       ["weblog", "WEBLOG"],
+	       ["projects", "PROJECTS"],
+	       ["teaching", "TEACHING"]
+	];
+
+	auto result = appender!string;
+	result.put("<nav aria-label=\"Primary navigation\">\n  <ul>\n");
+	foreach (link; links)
+	{
+		result.put("    <li><a href=\"/");
+		result.put(link[0]);
+		result.put("/\" class=\"");
+		if (section == link[0]) {result.put("is-active");}
+		result.put("\">");
+		result.put("</a></li>\n");
+	}
+	result.put("  </ul>\n</nav>");
+	return result.data;
+}
+
+private string render(string layout, const string[string] replacements, string name)
+{
+	enum marker = "$hyde{";
+	auto result = appender!string;
+	size_t cursor;
+	size_t count;
+	while (cursor < layout.length)
+	{
+		auto start = layout[cursor .. $].indexOf(marker);
+		if (start < 0)
+		{
+			result.put(layout[cursor .. $]);
+			break;
+		}
+		size_t status = cursor + cast(size_t) start;
+		result.put(layout[cursor .. start]);
+		size_t initus = status + marker.length;
+		auto end = layout[initus .. $].indexOf('}');
+		if (end < 0) {throw new Exception(name ~ ": unclosed placeholder");}
+		size_t terminus = initus + cast(size_t) end;
+		string nomen = layout[initus .. terminus];
+		if (nomen == "content") {++count;}
+		auto replacement = nomen in replacements;
+		if (replacement is null)
+		{
+			throw new Exception(name ~ ": unknown placeholder '" ~ nomen ~ "'");
+		}
+		result.put(*replacement);
+		cursor = terminus + 1;
+	}
+	if (count != 1)
+	{
+		throw new Exception(name ~ ": layout must containt exactly one $hyde{content}");
+	}
+	return result.data;
+}
+
+private string properPath(string path)
+{
+	auto resolved = realpath(path.toStringz, null);
+	if (resolved is null)
+	{
+		throw new Exception("cannot resolve path: " ~ path);
+	}
+	scope (exit) {free(resolved);}
+	return resolved.fromStringz.idup;
+}
+
+private string radix(string inputRoot)
+{
+	string root = absolutePath(inputRoot);
+	if (!exists(root) || !isDir(root))
+	{
+		throw new Exception("site root not a directory: " ~ inputRoot);
+	}
+	return properPath(root);
+}
+
+private bool isWithin(string child, string parent)
+{
+	string prefix = parent.endsWith("/") ? parent : parent ~ "/";
+	return child == parent || child.startsWith(prefix);
+}
+
+private string publicDirectory(string root)
+{
+	string output = buildPath(root, "public");
+	if (exists(output) && isSymlink(output))
+	{
+		throw new Exception("refusing symlinked public directory: " ~ output);
+	}
+	if (exists(output))
+	{
+		if (!isDir(output))
+		{
+			throw new Exception("public not directory: " ~ output);
+		}
+		if (!isWithin(absolutePath(output), root))
+		{
+			throw new Exception("public outside root: " ~ output);
+		}
+	}
+	else if (!isWithin(absolutePath(output), root))
+	{
+		throw new Exception("public outside root: " ~ output);
+	}
+	return output;
+}
+
+private string checkReadText(string path, string description)
+{
+	if (!exists(path) || !isFile(path))
+	{
+		throw new Exception("missing " ~ description ~ ": " ~ path);
+	}
+	try {return readText(path);}
+	catch (Exception error)
+	{
+		throw new Exception("cannot read " ~ description ~ " '" ~ path ~ "': " ~ error.msg);
+	}
+}
+
+private void claimPath(ref string[string] owners, string path, string owner)
+{
+	foreach (claimed, previousOwner; owners)
+	{
+		if (pathsConflict(path, claimed))
+		{
+			throw new Exception("collision between " ~ previousOwner ~ " and " ~ owner ~ ": " ~ path);
+		}
+	}
+	owners[path] = owner;
+}
+
+private bool pathsConflict(string left, string right)
+{
+	return left == right || (left.length > right.length && left.startsWith(right) && left[right.length] == '/') || (right.length > left.length && right.startsWith(left) && right[left.length] == '/');
+}
+
+private string escapeHTML(string value)
+{
+	auto result = appender!string;
+	foreach (character; value)
+	{
+		switch (character)
+		{
+			case '&': result.put("&amp;"); break;
+			case '<': result.put("&lt;"); break;
+			case '>': result.put("&gt;"); break;
+			case '"': result.put("&quot;"); break;
+			case '\'': result.put("&#39;"); break;
+			default: result.put(character); break;
+		}
+	}
+	return result.data;
+}
+
+void buildSite(string inputRoot)
+{
+	string root = radix(inputRoot);
+	string outputDirectory = publicDirectory(root);
+	string pagesDirectory = buildPath(root, "pages");
+	string layoutsDirectory = buildPath(root, "layouts");
+	string staticDirectory = buildPath(root, "static");
+	foreach (path; [pagesDirectory, layoutsDirectory, staticDirectory])
+	{
+		if (!exists(path) || !isDir(path))
+		{
+			throw new Exception("missing directory: " ~ path);
+		}
+	}
+	string configurePath = buildPath(root, "site.json");
+	Site site = parseSite(checkReadText(configurePath, "site.json"), configurePath);
+
+	Output[] files;
+	string[string] owners;
+	foreach (index, page; site.pages)
+	{
+		claimPath(owners, page.output, "pages[" ~ index.to!string ~ "]");
+	}
+	claimPath(owners, ".nojekyll", "hyde");
+
+	foreach (page; site.pages)
+	{
+		string content = checkReadText(buildPath(pagesDirectory, page.source), "page source");
+		string layoutPath = buildPath(layoutsDirectory, page.layout ~ ".html");
+		string layout = checkReadText(layoutPath, "layout");
+		string[string] replacements = [
+			       "title": escapeHTML(page.title),
+			       "site_title": escapeHTML(site.title),
+			       "descirption": escapeHTML(site.description),
+			       "content": content,
+			       "navigation": navigation(page.section)
+		];
+		string html = render(layout, replacements, layoutPath);
+		files ~= Output(page.output, cast(ubyte[]) html.dup);
+	}
+}
+
 private void printHelp()
 {
-	stdout.writeln(`   /|     }/>          __ _dhyyy#%%\                __`);
-	stdout.writeln(`  |%&     | y&;     &;/^</Y&&#%   %YY|   Y&dd#%=$=/|Y`);
-	stdout.writeln(`  ;&%    ;&  \Y_   |#&;   {%/      \#\ <y##//      7`);
-	stdout.writeln(`  :%___=%&|   \D__y#;    {%%        |D  |;/h\_`);
-	stdout.writeln(`<=%%#?^&#HY    |h%&;:     |%      |E   /&|&/%#?&?:;|`);
-	stdout.writeln(` /%/    H%/      y/      |%y    /%/    \%/        \|`);
-	stdout.writeln(` ||     |E      /#y       ||H%/y      /%%`);
-	stdout.writeln(`;/       %/   /D}        |%D/y       _|%&$%&%##|Yh\`);
-	stdout.writeln(`             y^         <y/          y/          y&`);
+	stdout.writeln(`   /|     }/>          __ _dhyyy#%%\     Y&dd#%=$=/|Y`);
+	stdout.writeln(`  |%&     | y&;     &;/^</Y&&#%   %YY| <y##//      7`);
+	stdout.writeln(`  ;&%    ;&  \Y_   |#&;   {%/      \#\  |;/h\_`);
+	stdout.writeln(`  :%___=%&|   \D__y#;    {%%        |D /&|&/%#?&?:;|`);
+	stdout.writeln(`<=%%#?^&#HY    |h%&;:     |%      |E   \%/        \|`);
+	stdout.writeln(` /%/    H%/      y/      |%y    /%/   /%%`);
+	stdout.writeln(` ||     |E      /#y       ||H%/y     _|%&$%&%##|Yh\`);
+	stdout.writeln(`;/       %/   /D}        |%D/y       y/          y&`);
+	stdout.writeln(`             y^         <y/`);
 	stdout.writeln();
 	stdout.writeln("Using hyde:");
 	stdout.writeln("  hyde build --site <path>");
@@ -155,6 +362,11 @@ int run(string[] arguments)
 	if (arguments.length == 2 && arguments[1] == "--help")
 	{
 		printHelp();
+		return 0;
+	}
+	if (arguments.length == 2 && arguments[1] == "--version")
+	{
+		stdout.writeln("hyDe ", hydeVersion);
 		return 0;
 	}
 	return 2;
