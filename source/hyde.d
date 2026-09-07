@@ -1,10 +1,13 @@
 module hyde;
 
+enum hydeVersion = "0.0.0";
+
 import std.json : JSONValue, JSONType, parseJSON, JSONOptions;
 import std.algorithm.searching : canFind;
 import std.string : split;
 import std.path : isAbsolute;
 import std.conv : to;
+import std.stdio : stdout;
 
 private struct Page
 {
@@ -127,4 +130,54 @@ private Site parseSite(string source, string name)
 		site.pages ~= page;
 	}
 	return site;
+}
+
+private void printHelp()
+{
+	stdout.writeln(`   /|     }/>          __ _dhyyy#%%\                __`);
+	stdout.writeln(`  |%&     | y&;     &;/^</Y&&#%   %YY|   Y&dd#%=$=/|Y`);
+	stdout.writeln(`  ;&%    ;&  \Y_   |#&;   {%/      \#\ <y##//      7`);
+	stdout.writeln(`  :%___=%&|   \D__y#;    {%%        |D  |;/h\_`);
+	stdout.writeln(`<=%%#?^&#HY    |h%&;:     |%      |E   /&|&/%#?&?:;|`);
+	stdout.writeln(` /%/    H%/      y/      |%y    /%/    \%/        \|`);
+	stdout.writeln(` ||     |E      /#y       ||H%/y      /%%`);
+	stdout.writeln(`;/       %/   /D}        |%D/y       _|%&$%&%##|Yh\`);
+	stdout.writeln(`             y^         <y/          y/          y&`);
+	stdout.writeln();
+	stdout.writeln("Using hyde:");
+	stdout.writeln("  hyde build --site <path>");
+	stdout.writeln("  hyde --help");
+	stdout.writeln("  hyde --version");
+}
+
+int run(string[] arguments)
+{
+	if (arguments.length == 2 && arguments[1] == "--help")
+	{
+		printHelp();
+		return 0;
+	}
+	return 2;
+}
+
+version (unittest)
+{
+	void main() {}
+}
+else
+{
+	int main(string[] arguments) {return run(arguments);}
+}
+
+unittest
+{
+	import std.exception : assertThrown;
+	foreach (field; ["source", "output"])
+	{
+		validateRelative("posts/index.html", field "test");
+		foreach (path; [""], "/index.html", `posts\index.html` , "./index.html", "posts/../index.html", "posts//index.html", "index.html\0ignored"])
+		{
+			asserThrown!Exception(validateRelative(path, field, "test"));
+		}
+	}
 }
