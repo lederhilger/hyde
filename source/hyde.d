@@ -423,4 +423,14 @@ unittest
 			"unknown": true
 		}]
 	}`, "site.json"));
+	const string[string] replacements = [
+	      "title": "Dr. Jekyll",
+	      "site_title": "$hyde{title}",
+	      "description": "English doctor with an alter ego",
+	      "content": "literal $hyde{missing}",
+	      "navigation": "nav"
+	];
+	assert(render("$hyde{title}: $hyde{content}", replacements, "layout") == "Dr. Jekyll: literal $hyde{missing}");
+	assert(render("$hyde{site_title}$hyde{content}", replacements, "layout") == "$hyde{title}literal $hyde{missing}");
+	assertThrown!Exception(render("$hyde{content}$hyde{title", replacements, "layout"));
 }
