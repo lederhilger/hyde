@@ -154,6 +154,7 @@ private string navigation(string section)
 		result.put("/\" class=\"");
 		if (section == link[0]) {result.put("is-active");}
 		result.put("\">");
+		result.put(link[1]);
 		result.put("</a></li>\n");
 	}
 	result.put("  </ul>\n</nav>");
