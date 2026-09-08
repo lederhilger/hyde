@@ -399,4 +399,16 @@ unittest
 {
 	import std.exception : assertThrown;
 	assert(escapeHTML(`<tag lorem="ipsum">Jekyll & 'Hyde'</tag>`) == "&lt;tag lorem=&quot;ipsum&quot;&gt;Jekyll &amp; &#39;Hyde&#39;&lt;/tag&gt;");
+	assertThrown!Exception(parseSite(`{
+		"title":"Dr. Jekyll & Mr. Hyde",
+		"description": "The Strange Case",
+		"pages":"[
+			"title": "The Story of the Door",
+			"source": "doorstory.html",
+			"output": "doorstory.html",
+			"layout": "default",
+			"section": ""
+		],
+		"unknown": true
+	}`, "site.json"));
 }
