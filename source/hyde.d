@@ -193,7 +193,7 @@ private string render(string layout, const string[string] replacements, string n
 	}
 	if (count != 1)
 	{
-		throw new Exception(name ~ ": layout must containt exactly one $hyde{content}");
+		throw new Exception(name ~ ": layout must contain exactly one $hyde{content}");
 	}
 	return result.data;
 }
@@ -331,7 +331,7 @@ void buildSite(string inputRoot)
 		string[string] replacements = [
 			       "title": escapeHTML(page.title),
 			       "site_title": escapeHTML(site.title),
-			       "descirption": escapeHTML(site.description),
+			       "description": escapeHTML(site.description),
 			       "content": content,
 			       "navigation": navigation(page.section)
 		];
@@ -387,10 +387,16 @@ unittest
 	import std.exception : assertThrown;
 	foreach (field; ["source", "output"])
 	{
-		validateRelative("posts/index.html", field "test");
-		foreach (path; [""], "/index.html", `posts\index.html` , "./index.html", "posts/../index.html", "posts//index.html", "index.html\0ignored"])
+		validateRelative("posts/index.html", field, "test");
+		foreach (path; ["", "/index.html", `posts\index.html` , "./index.html", "posts/../index.html", "posts//index.html", "index.html\0ignored"])
 		{
-			asserThrown!Exception(validateRelative(path, field, "test"));
+			assertThrown!Exception(validateRelative(path, field, "test"));
 		}
 	}
+}
+
+unittest
+{
+	import std.exception : assertThrown;
+	assert(escapeHTML(`<tag lorem="ipsum">Jekyll & 'Hyde'</tag>`) == "&lt;tag lorem=&quot;ipsum&quot;&gt;Jekyll &amp; &#39;Hyde&#39;&lt;/tag&gt;");
 }
