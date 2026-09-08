@@ -175,7 +175,7 @@ private string render(string layout, const string[string] replacements, string n
 			break;
 		}
 		size_t status = cursor + cast(size_t) start;
-		result.put(layout[cursor .. start]);
+		result.put(layout[cursor .. status]);
 		size_t initus = status + marker.length;
 		auto end = layout[initus .. $].indexOf('}');
 		if (end < 0) {throw new Exception(name ~ ": unclosed placeholder");}
