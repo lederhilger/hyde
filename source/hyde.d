@@ -421,5 +421,6 @@ unittest
 			"layout": "default",
 			"section": "",
 			"unknown": true
-		}],}`, "site.json"));
+		}]
+	}`, "site.json"));
 }
