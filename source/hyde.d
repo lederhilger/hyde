@@ -402,13 +402,24 @@ unittest
 	assertThrown!Exception(parseSite(`{
 		"title":"Dr. Jekyll & Mr. Hyde",
 		"description": "The Strange Case",
-		"pages":"[
+		"pages":[{
 			"title": "The Story of the Door",
 			"source": "doorstory.html",
 			"output": "doorstory.html",
 			"layout": "default",
 			"section": ""
-		],
+		}],
 		"unknown": true
 	}`, "site.json"));
+	assertThrown!Exception(parseSite(`{
+		"title":"Dr. Jekyll & Mr. Hyde",
+		"description": "The Strange Case",
+		"pages":[{
+			"title": "The Story of the Door",
+			"source": "doorstory.html",
+			"output": "doorstory.html",
+			"layout": "default",
+			"section": "",
+			"unknown": true
+		}],}`, "site.json"));
 }
