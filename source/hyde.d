@@ -385,14 +385,14 @@ else
 unittest
 {
 	import std.exception : assertThrown;
-	foreach (field; ["source", "output"])
+	validateRelative("posts/index.html", "source", "test");
+	foreach (path; ["", "/index.html", `posts\index.html` , "./index.html", "posts/../index.html", "posts//index.html", "index.html\0ignored"])
 	{
-		validateRelative("posts/index.html", field, "test");
-		foreach (path; ["", "/index.html", `posts\index.html` , "./index.html", "posts/../index.html", "posts//index.html", "index.html\0ignored"])
-		{
-			assertThrown!Exception(validateRelative(path, field, "test"));
-		}
+		assertThrown!Exception(validateRelative(path, "output", "test"));
 	}
+	string[string] owners;
+	claimPath(owners, "index.html", "first page");
+	assertThrown!Exception(claimPath(owners, "index.html", "second page"));
 }
 
 unittest
