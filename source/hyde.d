@@ -5,13 +5,13 @@ enum hydeVersion = "0.0.0";
 import std.json : JSONValue, JSONType, parseJSON, JSONOptions;
 import std.algorithm.searching : canFind, endsWith, startsWith;
 import std.string : split, indexOf, toStringz, fromStringz;
-import std.path : isAbsolute, buildPath, absolutePath;
+import std.path : isAbsolute, buildPath, absolutePath, dirName, relativePath;
 import core.sys.posix.stdlib : realpath;
 import std.conv : to;
-import std.stdio : stdout;
+import std.stdio : stdout, stderr;
 import std.array : appender;
 import core.stdc.stdlib : free;
-import std.file : isDir, exists, isSymlink, readText, isFile;
+import std.file : isDir, exists, isSymlink, readText, isFile, SpanMode, dirEntries, rmdirRecurse, mkdirRecurse, read, write;
 
 private struct Page
 {
@@ -66,7 +66,6 @@ private void validateRelative(string path, string field, string name)
 	}
 }
 
-/// Needs some fixing.
 private void validateSection(string section, string name)
 {
 	switch (section)
@@ -338,6 +337,34 @@ void buildSite(string inputRoot)
 		string html = render(layout, replacements, layoutPath);
 		files ~= Output(page.output, cast(ubyte[]) html.dup);
 	}
+
+	foreach (entry; dirEntries(staticDirectory, SpanMode.depth))
+	{
+		if (!entry.isFile) {continue;}
+		string relative = relativePath(entry.name, staticDirectory);
+		claimPath(owners, relative, "static/" ~ relative);
+		ubyte[] data;
+		try
+		{
+			data = cast(ubyte[]) read(entry.name);
+		}
+		catch (Exception error)
+		{
+			throw new Exception("cannot read '" ~ entry.name ~ "': " ~ error.msg);
+		}
+		files ~= Output(relative, data);
+	}
+	files ~= Output(".nojekyll", cast(ubyte[]) []);
+
+	if (exists(outputDirectory)) {rmdirRecurse(outputDirectory);}
+	mkdirRecurse(outputDirectory);
+	foreach (file; files)
+	{
+		string destination = buildPath(outputDirectory, file.path);
+		string parent = dirName(destination);
+		if (!exists(parent)) {mkdirRecurse(parent);}
+		write(destination, file.data);
+	}
 }
 
 private void printHelp()
@@ -369,6 +396,19 @@ int run(string[] arguments)
 	{
 		stdout.writeln("hyDe ", hydeVersion);
 		return 0;
+	}
+	if (arguments.length == 4 && arguments[1] == "build" && arguments[2] == "--site" && arguments[3].length)
+	{
+		try
+		{
+			buildSite(arguments[3]);
+			return 0;
+		}
+		catch (Exception error)
+		{
+			stderr.writeln("hyde: ", error.msg);
+			return 1;
+		}
 	}
 	return 2;
 }
