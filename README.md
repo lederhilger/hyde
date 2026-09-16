@@ -21,3 +21,23 @@ Using hyde:
   hyde --version
 
 ```
+
+## Building hyde
+
+Build `hyde` with `dub`:
+
+```
+$ dub build --build=release
+```
+
+This creates a directory `./build` containing an executable `hyde`.
+
+## Building the website
+
+From the `hyde` directory:
+
+```
+$ build/hyde build --site path/to/site
+```
+
+This creates a `public` directory in the site directory with the formatted HTML files.
